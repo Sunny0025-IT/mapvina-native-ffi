@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "module": "es2022",
+    "declaration": true,
+    "sourceMap": true,
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

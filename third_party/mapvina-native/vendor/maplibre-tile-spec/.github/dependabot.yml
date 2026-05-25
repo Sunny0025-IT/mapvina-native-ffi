@@ -1,0 +1,72 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+#
+# Config file spec:
+# https://docs.github.com/en/enterprise-cloud@latest/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#package-ecosystem
+
+version: 2
+updates:
+
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      all-actions-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      all-actions-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: gradle  # should this be "maven" or "gradle"?
+    directory: "/java"
+    schedule:
+      interval: daily
+      time: "02:00"
+    groups:
+      all-gradle-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      all-gradle-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/ts"
+    schedule:
+      interval: daily
+    versioning-strategy: increase
+    groups:
+      all-npm-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      all-npm-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # Update Rust dependencies
+  - package-ecosystem: cargo
+    directory: "/rust"
+    schedule:
+      interval: daily
+      time: "02:00"
+    open-pull-requests-limit: 10
+    groups:
+      all-cargo-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      all-cargo-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"

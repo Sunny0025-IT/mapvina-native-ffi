@@ -1,0 +1,10 @@
+*.class
+*.log
+.DS_Store
+.idea/
+.vscode/
+bazel-*
+bin/
+coverage/
+dist/
+tmp/

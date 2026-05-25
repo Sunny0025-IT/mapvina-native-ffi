@@ -1,0 +1,14 @@
+[tasks.build]
+depends = ["//:ensure-native-library"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+run = "cargo build -p mapvina-native-sys -p mapvina-native-core -p mapvina-native"
+
+[tasks.test]
+depends = ["//:ensure-native-library"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+run = "cargo test -p mapvina-native-sys -p mapvina-native-core -p mapvina-native"
+
+[tasks.ci]
+depends = [":test"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+run = "cargo clippy -p mapvina-native-sys -p mapvina-native-core -p mapvina-native --all-targets -- -D warnings"

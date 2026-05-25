@@ -1,0 +1,30 @@
+// swift-tools-version: 6.0
+
+import PackageDescription
+
+let nativeBuildDir = Context.environment["MLN_FFI_BUILD_DIR"] ?? {
+  fatalError("MLN_FFI_BUILD_DIR is required")
+}()
+
+let package = Package(
+  name: "swift-map",
+  platforms: [.macOS(.v14)],
+  products: [
+    .executable(name: "swift-map", targets: ["SwiftMap"]),
+  ],
+  targets: [
+    .systemLibrary(
+      name: "CMapVinaNativeC"
+    ),
+    .executableTarget(
+      name: "SwiftMap",
+      dependencies: ["CMapVinaNativeC"],
+      linkerSettings: [
+        .unsafeFlags(["-L\(nativeBuildDir)", "-lmapvina-native-c", "-Xlinker", "-rpath", "-Xlinker", nativeBuildDir]),
+        .linkedFramework("AppKit"),
+        .linkedFramework("Metal"),
+        .linkedFramework("QuartzCore"),
+      ]
+    ),
+  ]
+)

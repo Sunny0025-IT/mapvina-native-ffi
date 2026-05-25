@@ -1,0 +1,28 @@
+[tasks.compile-shaders]
+hide = true
+run = [
+  "glslangValidator -V src/vulkan_texture_compositor/shaders/fullscreen.vert -o src/vulkan_texture_compositor/shaders/fullscreen.vert.spv",
+  "glslangValidator -V src/vulkan_texture_compositor/shaders/sample.frag -o src/vulkan_texture_compositor/shaders/sample.frag.spv",
+]
+
+[tasks.build]
+depends = ["//:ensure-native-library", ":compile-shaders"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+run = "cargo build -p rust-map"
+
+[tasks.ci]
+depends = [":build"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+run = "cargo clippy -p rust-map --all-targets -- -D warnings"
+
+[tasks.run]
+depends = ["//:ensure-native-library", ":compile-shaders"]
+dir = "{{env.MLN_FFI_REPO_ROOT}}"
+usage = 'arg "[render-target]" default="owned-texture"'
+run = "cargo run -p rust-map -- --render-target=\"$usage_render_target\""
+
+[tasks."run:owned-texture"]
+run = [{ task = "run", args = ["owned-texture"] }]
+
+[tasks."run:native-surface"]
+run = [{ task = "run", args = ["native-surface"] }]

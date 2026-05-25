@@ -1,0 +1,4 @@
+module CMapVinaNativeC [system] {
+  header "include/mapvina_native_c.h"
+  export *
+}

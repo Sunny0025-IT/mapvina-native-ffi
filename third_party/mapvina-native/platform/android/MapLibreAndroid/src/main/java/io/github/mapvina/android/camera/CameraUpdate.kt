@@ -1,0 +1,16 @@
+package io.github.mapvina.android.camera
+
+import io.github.mapvina.android.maps.MapLibreMap
+
+/**
+ * Interface definition for camera updates.
+ */
+interface CameraUpdate {
+    /**
+     * Get the camera position from the camera update.
+     *
+     * @param maplibreMap Map object to build the position from
+     * @return the camera position from the implementing camera update
+     */
+    fun getCameraPosition(maplibreMap: MapLibreMap): CameraPosition?
+}

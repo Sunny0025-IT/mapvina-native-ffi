@@ -1,0 +1,13 @@
+[tasks.build]
+depends = ["//:ensure-native-library"]
+run = '''
+if [[ "${MLN_FFI_RENDER_BACKEND:-metal}" != "metal" ]]; then
+  echo "swift-map currently supports Metal variants only" >&2
+  exit 1
+fi
+swift build --scratch-path ".build/$MLN_FFI_VARIANT"
+'''
+
+[tasks.run]
+depends = ["build"]
+run = 'swift run --scratch-path ".build/$MLN_FFI_VARIANT"'

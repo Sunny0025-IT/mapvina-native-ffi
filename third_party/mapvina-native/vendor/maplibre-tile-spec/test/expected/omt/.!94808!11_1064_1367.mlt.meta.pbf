@@ -1,0 +1,19 @@
+F
+	landcover
+id" 
+geometry* 
+class" 	
+subclass" 	j
+waterway
+id" 
+geometry* 
+class" 	5
+name*+ 2
+default	2
+
+de	2
+
+en	2
+landuse
+id" 
+geometry* 

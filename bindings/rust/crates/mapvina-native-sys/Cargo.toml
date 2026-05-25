@@ -1,0 +1,11 @@
+[package]
+name = "mapvina-native-sys"
+version = "1.0.0"
+build = "build.rs"
+edition.workspace = true
+license.workspace = true
+links = "mapvina-native-c"
+repository.workspace = true
+
+[build-dependencies]
+bindgen = "0.72.1"

@@ -1,0 +1,31 @@
+# Enable broad lint families here and exclude noisy or project-inappropriate
+# rules centrally instead of scattering NOLINT comments through implementation
+# files.
+---
+Checks:
+  - -*
+  - misc-include-cleaner
+  - modernize-*
+  - readability-*
+  - clang-analyzer-*
+  - bugprone-*
+  - cert-*
+  - cppcoreguidelines-*
+  - -bugprone-easily-swappable-parameters
+  - -cppcoreguidelines-avoid-magic-numbers
+  - -cppcoreguidelines-pro-type-union-access
+  - -readability-magic-numbers
+CheckOptions:
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: vulkan/.*
+  - key: readability-braces-around-statements.ShortStatementLines
+    value: 2
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: i|j|k|n|x|y|z
+  - key: readability-inconsistent-declaration-parameter-name.IgnoreMacros
+    value: false
+WarningsAsErrors: "*"
+FormatStyle: file
+SystemHeaders: false
+HeaderFilterRegex: "^(src)/|^.*/maplibre-native-ffi/(src)/"
+ExcludeHeaderFilterRegex: "^.*/maplibre-native-ffi/third_party/"

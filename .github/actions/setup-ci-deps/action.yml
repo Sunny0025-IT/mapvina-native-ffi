@@ -1,0 +1,91 @@
+name: Setup CI deps
+description: Install sccache and mise toolchain
+
+runs:
+  using: composite
+  steps:
+    - name: Enable Git long paths
+      if: ${{ runner.os == 'Windows' }}
+      shell: pwsh
+      run: git config --global core.longpaths true
+
+    - name: Install sccache
+      uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+
+    - name: Wire sccache into CMake
+      shell: bash
+      run: |
+        {
+          echo "SCCACHE_GHA_ENABLED=true"
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
+        } >> "$GITHUB_ENV"
+
+    - name: Cache Cargo packages
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-registry-v1-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache Gradle
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-${{ runner.arch }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-gradle-
+
+    - name: Trim Windows PATH before Pixi activation
+      if: ${{ runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        # Pixi's Windows activation uses cmd.exe and emits a single PATH update
+        # line; the default GitHub Actions Path can make that line exceed cmd's
+        # limit. See https://github.com/prefix-dev/pixi/issues/1108.
+        $paths = @(
+          $(if ($env:SCCACHE_PATH) { Split-Path -Parent $env:SCCACHE_PATH }),
+          "C:\Program Files\Git\bin",
+          "C:\Program Files\Git\usr\bin",
+          "$env:SystemRoot\System32",
+          "$env:SystemRoot",
+          "$env:SystemRoot\System32\Wbem",
+          "$env:SystemRoot\System32\WindowsPowerShell\v1.0",
+          "C:\Program Files\PowerShell\7",
+          "C:\Program Files\Git\cmd"
+        ) | Where-Object { $_ -and (Test-Path $_) }
+
+        "Path=$($paths -join ';')" >> $env:GITHUB_ENV
+
+    - name: Install mise toolchain
+      uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      with:
+        # TODO: unpin after mise/pixi resolve SLSA verification for Pixi's
+        # binary-only release attestations.
+        # https://github.com/jdx/mise/discussions/9895
+        # https://github.com/prefix-dev/pixi/issues/6133
+        version: 2026.5.7
+        cache: true
+        cache_key_prefix: mise-v2
+        install: true
+
+    # The mise action may restore Rust metadata without all rustup-managed
+    # component files. Repair the toolchain only when rustup cannot add the
+    # configured components or the component binaries still cannot run.
+    - name: Ensure Rust components
+      shell: bash
+      run: |
+        ensure_rust_components() {
+          mise exec -- rustup component add rustfmt clippy &&
+            mise exec -- cargo fmt --version &&
+            mise exec -- cargo clippy --version
+        }
+
+        if ! ensure_rust_components; then
+          mise install --force rust
+          ensure_rust_components
+        fi

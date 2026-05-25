@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = [
+  "bindings/rust/crates/mapvina-native",
+  "bindings/rust/crates/mapvina-native-core",
+  "bindings/rust/crates/mapvina-native-sys",
+  "examples/rust-map",
+]
+
+[workspace.package]
+edition = "2024"
+license = "BSD-2-Clause"
+repository = "https://github.io/github/mapvina/mapvina-native-ffi"

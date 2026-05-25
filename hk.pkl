@@ -1,0 +1,55 @@
+// hk orchestrates checks for pre-commit, `mise run check`, and `mise run fix`.
+// Tools used here must be installed by `mise install`.
+
+amends "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Builtins.pkl"
+
+local lintSteps = new Mapping<String, Step> {
+  ["dprint"] = Builtins.dprint
+  ["actionlint"] {
+    glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
+    check = "actionlint {{files}}"
+  }
+  ["jvl"] {
+    glob = List("**/*.json", "**/*.jsonc")
+    check = "jvl check {{files}}"
+  }
+  ["vp-check"] {
+    glob = List("docs/**/*.ts", "docs/**/*.tsx", "docs/**/*.js", "docs/**/*.jsx", "docs/**/*.mjs", "docs/**/*.cjs")
+    check = "pnpm --dir docs exec vp check --no-fmt"
+    fix = "pnpm --dir docs exec vp check --no-fmt --fix"
+  }
+  ["ruff"] {
+    glob = List("**/*.py")
+    exclude = List("third_party/**")
+    check = "uv run ruff check {{files}} && uv run ruff format --check {{files}}"
+    fix = "uv run ruff check --fix {{files}} && uv run ruff format {{files}}"
+  }
+  ["ty"] {
+    glob = List("**/*.py")
+    exclude = List("third_party/**")
+    check = "uv run ty check --error-on-warning .mise"
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps {
+      ...lintSteps
+    }
+  }
+  ["check"] {
+    steps {
+      ...lintSteps
+    }
+  }
+  ["fix"] {
+    fix = true
+    steps {
+      ...lintSteps
+    }
+  }
+}

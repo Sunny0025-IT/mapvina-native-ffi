@@ -1,0 +1,15 @@
+[package]
+name = "mapvina-native"
+version = "1.0.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bitflags = "2.10.0"
+mapvina-native-core = { path = "../mapvina-native-core" }
+mapvina-native-sys = { path = "../mapvina-native-sys" }
+
+[dev-dependencies]
+ash = "0.38.0"
+static_assertions = "1.1.0"

@@ -1,0 +1,275 @@
+#pragma once
+
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <memory>
+#include <thread>
+
+#include <mbgl/gfx/headless_backend.hpp>
+#include <mbgl/gfx/renderer_backend.hpp>
+#include <mbgl/renderer/renderer.hpp>
+
+#include "diagnostics/diagnostics.hpp"
+#include "mapvina_native_c.h"
+
+struct mln_render_session;
+
+namespace mln::core {
+
+enum class RenderSessionKind : uint8_t { Surface, Texture };
+enum class TextureSessionApi : uint8_t { Generic, Metal, Vulkan };
+enum class TextureSessionFrameKind : uint8_t { None, MetalOwned, VulkanOwned };
+enum class TextureSessionMode : uint8_t { Owned, Borrowed };
+
+class SurfaceSessionBackend {
+ public:
+  SurfaceSessionBackend() = default;
+  SurfaceSessionBackend(const SurfaceSessionBackend&) = delete;
+  auto operator=(const SurfaceSessionBackend&)
+    -> SurfaceSessionBackend& = delete;
+  SurfaceSessionBackend(SurfaceSessionBackend&&) = delete;
+  auto operator=(SurfaceSessionBackend&&) -> SurfaceSessionBackend& = delete;
+  virtual ~SurfaceSessionBackend() = default;
+
+  virtual auto renderer_backend() -> mbgl::gfx::RendererBackend& = 0;
+  virtual void resize(uint32_t physical_width, uint32_t physical_height) = 0;
+};
+
+class TextureSessionBackend {
+ public:
+  TextureSessionBackend() = default;
+  TextureSessionBackend(const TextureSessionBackend&) = delete;
+  auto operator=(const TextureSessionBackend&)
+    -> TextureSessionBackend& = delete;
+  TextureSessionBackend(TextureSessionBackend&&) = delete;
+  auto operator=(TextureSessionBackend&&) -> TextureSessionBackend& = delete;
+  virtual ~TextureSessionBackend() = default;
+
+  virtual auto headless_backend() -> mbgl::gfx::HeadlessBackend& = 0;
+  virtual auto renderer_backend() -> mbgl::gfx::RendererBackend* {
+    return headless_backend().getRendererBackend();
+  }
+  virtual void prepare_render_resources() {}
+  virtual auto after_render(mln_render_session& session) -> mln_status {
+    (void)session;
+    return MLN_STATUS_OK;
+  }
+  virtual auto acquire_vulkan_owned_frame(
+    const mln_render_session& session, mln_vulkan_owned_texture_frame& out_frame
+  ) -> mln_status {
+    (void)session;
+    (void)out_frame;
+    return MLN_STATUS_UNSUPPORTED;
+  }
+};
+
+struct RenderSurfaceState {
+  std::unique_ptr<SurfaceSessionBackend> backend = nullptr;
+};
+
+struct RenderTextureState {
+  std::unique_ptr<TextureSessionBackend> backend = nullptr;
+  uint64_t next_frame_id = 1;
+  uint64_t acquired_frame_id = 0;
+  bool acquired = false;
+  TextureSessionFrameKind acquired_frame_kind = TextureSessionFrameKind::None;
+  TextureSessionApi api_kind = TextureSessionApi::Generic;
+  TextureSessionMode mode = TextureSessionMode::Owned;
+  void* rendered_native_texture = nullptr;
+  void* acquired_native_texture = nullptr;
+};
+
+}  // namespace mln::core
+
+struct mln_render_session {
+  mln::core::RenderSessionKind kind = mln::core::RenderSessionKind::Surface;
+  mln_map* map = nullptr;
+  std::thread::id owner_thread;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t physical_width = 0;
+  uint32_t physical_height = 0;
+  double scale_factor = 1.0;
+  uint64_t generation = 1;
+  uint64_t rendered_generation = 0;
+  bool attached = true;
+
+  std::unique_ptr<mbgl::Renderer> renderer = nullptr;
+  mln::core::RenderSurfaceState surface;
+  mln::core::RenderTextureState texture;
+};
+
+namespace mln::core {
+
+struct RenderSessionAttachMessages {
+  const char* null_session;
+  const char* null_output;
+  const char* non_null_output;
+};
+
+auto register_render_session(
+  mln_render_session* handle, std::unique_ptr<mln_render_session> session
+) -> void;
+auto validate_render_session(mln_render_session* session) -> mln_status;
+auto validate_live_attached_render_session(mln_render_session* session)
+  -> mln_status;
+auto erase_render_session(mln_render_session* session)
+  -> std::unique_ptr<mln_render_session>;
+
+inline auto validate_attach_output(
+  mln_render_session** out_session, const char* null_message,
+  const char* not_null_message
+) -> mln_status {
+  if (out_session == nullptr) {
+    set_thread_error(null_message);
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  if (*out_session != nullptr) {
+    set_thread_error(not_null_message);
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  return MLN_STATUS_OK;
+}
+
+inline auto physical_dimension(uint32_t logical, double scale_factor)
+  -> uint32_t {
+  return static_cast<uint32_t>(std::ceil(logical * scale_factor));
+}
+
+inline auto validate_render_target_extent(
+  const mln_render_target_extent& extent, const char* dimension_message
+) -> mln_status {
+  if (extent.size < sizeof(mln_render_target_extent)) {
+    set_thread_error("mln_render_target_extent.size is too small");
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  if (
+    extent.width == 0 || extent.height == 0 ||
+    !std::isfinite(extent.scale_factor) || extent.scale_factor <= 0.0
+  ) {
+    set_thread_error(dimension_message);
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  return MLN_STATUS_OK;
+}
+
+inline auto validate_metal_context(
+  const mln_metal_context_descriptor& context, bool require_device
+) -> mln_status {
+  if (context.size < sizeof(mln_metal_context_descriptor)) {
+    set_thread_error("mln_metal_context_descriptor.size is too small");
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  if (require_device && context.device == nullptr) {
+    set_thread_error("Metal device must not be null");
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  return MLN_STATUS_OK;
+}
+
+inline auto validate_vulkan_context(
+  const mln_vulkan_context_descriptor& context, const char* null_handles_message
+) -> mln_status {
+  if (context.size < sizeof(mln_vulkan_context_descriptor)) {
+    set_thread_error("mln_vulkan_context_descriptor.size is too small");
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  if (
+    context.instance == nullptr || context.physical_device == nullptr ||
+    context.device == nullptr || context.graphics_queue == nullptr
+  ) {
+    set_thread_error(null_handles_message);
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  return MLN_STATUS_OK;
+}
+
+inline auto set_session_extent(
+  mln_render_session& session, const mln_render_target_extent& extent
+) -> void {
+  session.width = extent.width;
+  session.height = extent.height;
+  session.scale_factor = extent.scale_factor;
+  session.physical_width =
+    physical_dimension(extent.width, extent.scale_factor);
+  session.physical_height =
+    physical_dimension(extent.height, extent.scale_factor);
+}
+
+inline auto validate_physical_size(
+  uint32_t width, uint32_t height, double scale_factor,
+  const char* too_large_message
+) -> mln_status {
+  constexpr auto max_dimension =
+    static_cast<double>(std::numeric_limits<uint32_t>::max());
+  if (
+    std::ceil(width * scale_factor) > max_dimension ||
+    std::ceil(height * scale_factor) > max_dimension
+  ) {
+    set_thread_error(too_large_message);
+    return MLN_STATUS_INVALID_ARGUMENT;
+  }
+  return MLN_STATUS_OK;
+}
+
+auto attach_render_session(
+  std::unique_ptr<mln_render_session> session, mln_render_session** out_session,
+  RenderSessionKind kind, RenderSessionAttachMessages messages
+) -> mln_status;
+
+auto render_session_resize(
+  mln_render_session* session, uint32_t width, uint32_t height,
+  double scale_factor
+) -> mln_status;
+auto render_session_render_update(mln_render_session* session) -> mln_status;
+auto render_session_detach(mln_render_session* session) -> mln_status;
+auto render_session_destroy(mln_render_session* session) -> mln_status;
+auto render_session_reduce_memory_use(mln_render_session* session)
+  -> mln_status;
+auto render_session_clear_data(mln_render_session* session) -> mln_status;
+auto render_session_dump_debug_logs(mln_render_session* session) -> mln_status;
+auto render_session_set_feature_state(
+  mln_render_session* session, const mln_feature_state_selector* selector,
+  const mln_json_value* state
+) -> mln_status;
+auto render_session_get_feature_state(
+  mln_render_session* session, const mln_feature_state_selector* selector,
+  mln_json_snapshot** out_state
+) -> mln_status;
+auto render_session_remove_feature_state(
+  mln_render_session* session, const mln_feature_state_selector* selector
+) -> mln_status;
+auto render_session_query_rendered_features(
+  mln_render_session* session, const mln_rendered_query_geometry* geometry,
+  const mln_rendered_feature_query_options* options,
+  mln_feature_query_result** out_result
+) -> mln_status;
+auto render_session_query_source_features(
+  mln_render_session* session, mln_string_view source_id,
+  const mln_source_feature_query_options* options,
+  mln_feature_query_result** out_result
+) -> mln_status;
+auto render_session_query_feature_extensions(
+  mln_render_session* session, mln_string_view source_id,
+  const mln_feature* feature, mln_string_view extension,
+  mln_string_view extension_field, const mln_json_value* arguments,
+  mln_feature_extension_result** out_result
+) -> mln_status;
+auto feature_query_result_count(
+  const mln_feature_query_result* result, std::size_t* out_count
+) -> mln_status;
+auto feature_query_result_get(
+  const mln_feature_query_result* result, std::size_t index,
+  mln_queried_feature* out_feature
+) -> mln_status;
+auto feature_query_result_destroy(mln_feature_query_result* result) -> void;
+auto feature_extension_result_get(
+  const mln_feature_extension_result* result,
+  mln_feature_extension_result_info* out_info
+) -> mln_status;
+auto feature_extension_result_destroy(mln_feature_extension_result* result)
+  -> void;
+
+}  // namespace mln::core
